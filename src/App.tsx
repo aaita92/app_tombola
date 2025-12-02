@@ -19,6 +19,8 @@ const TombolaPrizeManager = () => {
   const [selectedPrizes, setSelectedPrizes] = useState(null);
   const [editingPrize, setEditingPrize] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [editingPrizeId, setEditingPrizeId] = useState(null);
+  const [prizeQuantitySelector, setPrizeQuantitySelector] = useState(null);
 
   // Load data from storage on mount
   useEffect(() => {
@@ -69,6 +71,37 @@ const TombolaPrizeManager = () => {
 
   const deletePrize = (id) => {
     setPrizes(prizes.filter(p => p.id !== id));
+  };
+
+  const editPrize = (id) => {
+    const prize = prizes.find(p => p.id === id);
+    if (prize) {
+      setNewPrize(prize);
+      setEditingPrizeId(id);
+    }
+  };
+
+  const updatePrize = () => {
+    if (newPrize.descrizione && newPrize.prezzo && newPrize.tag && newPrize.quantita) {
+      setPrizes(prizes.map(p => 
+        p.id === editingPrizeId 
+          ? {
+              ...p,
+              descrizione: newPrize.descrizione,
+              prezzo: parseFloat(newPrize.prezzo),
+              tag: newPrize.tag,
+              quantita: parseInt(newPrize.quantita)
+            }
+          : p
+      ));
+      setNewPrize({ descrizione: '', prezzo: '', tag: '', quantita: 1 });
+      setEditingPrizeId(null);
+    }
+  };
+
+  const cancelEdit = () => {
+    setNewPrize({ descrizione: '', prezzo: '', tag: '', quantita: 1 });
+    setEditingPrizeId(null);
   };
 
   const calculateBudgets = () => {
@@ -244,6 +277,7 @@ const TombolaPrizeManager = () => {
         [editingPrize.category]: currentItems
       });
       setEditingPrize(null);
+      setPrizeQuantitySelector(null);
     }
   };
 
@@ -484,13 +518,23 @@ const TombolaPrizeManager = () => {
                 onChange={(e) => setNewPrize({ ...newPrize, quantita: e.target.value })}
                 className="border border-gray-300 rounded-lg px-3 py-2"
               />
-              <button
-                onClick={addPrize}
-                className="bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2"
-              >
-                <Plus size={20} />
-                Aggiungi
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={editingPrizeId ? updatePrize : addPrize}
+                  className="flex-1 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2"
+                >
+                  <Plus size={20} />
+                  {editingPrizeId ? 'Salva' : 'Aggiungi'}
+                </button>
+                {editingPrizeId && (
+                  <button
+                    onClick={cancelEdit}
+                    className="px-4 bg-gray-400 text-white rounded-lg hover:bg-gray-500"
+                  >
+                    <X size={20} />
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Prizes List */}
@@ -517,12 +561,20 @@ const TombolaPrizeManager = () => {
                       </td>
                       <td className="px-4 py-3">{prize.quantita}</td>
                       <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => deletePrize(prize.id)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                        <div className="flex gap-2 justify-center">
+                          <button
+                            onClick={() => editPrize(prize.id)}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            <Edit2 size={18} />
+                          </button>
+                          <button
+                            onClick={() => deletePrize(prize.id)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -830,18 +882,52 @@ const TombolaPrizeManager = () => {
               {editingPrize && (
                 <div className="mb-6 border-t pt-4">
                   <h3 className="font-bold mb-2">Seleziona premio alternativo per {editingPrize.category}:</h3>
-                  <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
-                    {prizes.filter(p => p.quantita > 0).map(prize => (
+                  {prizeQuantitySelector ? (
+                    <div className="bg-gray-50 rounded p-4 border border-gray-300">
+                      <div className="mb-4">
+                        <p className="font-semibold text-lg">{prizeQuantitySelector.descrizione}</p>
+                        <p className="text-gray-600">Prezzo: €{prizeQuantitySelector.prezzo.toFixed(2)}</p>
+                        <p className="text-gray-600">Tag: {prizeQuantitySelector.tag}</p>
+                        <p className="text-blue-600">Disponibili: {prizeQuantitySelector.quantita}</p>
+                      </div>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-2">Seleziona quantità:</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {Array.from({ length: Math.min(prizeQuantitySelector.quantita, 5) }, (_, i) => i + 1).map(qty => (
+                            <button
+                              key={qty}
+                              onClick={() => {
+                                selectReplacementPrize(prizeQuantitySelector, qty);
+                              }}
+                              className="border border-blue-400 bg-blue-50 hover:bg-blue-100 rounded p-2 font-semibold"
+                            >
+                              x{qty}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                       <button
-                        key={prize.id}
-                        onClick={() => selectReplacementPrize(prize)}
-                        className="text-left border border-gray-300 rounded p-2 hover:bg-gray-50"
+                        onClick={() => setPrizeQuantitySelector(null)}
+                        className="w-full text-gray-600 hover:text-gray-800 border border-gray-300 rounded py-2 mt-2"
                       >
-                        <p className="text-sm font-semibold">{prize.descrizione}</p>
-                        <p className="text-xs">€{prize.prezzo.toFixed(2)} - {prize.tag}</p>
+                        Annulla
                       </button>
-                    ))}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                      {prizes.filter(p => p.quantita > 0).map(prize => (
+                        <button
+                          key={prize.id}
+                          onClick={() => setPrizeQuantitySelector(prize)}
+                          className="text-left border border-gray-300 rounded p-2 hover:bg-gray-50"
+                        >
+                          <p className="text-sm font-semibold">{prize.descrizione}</p>
+                          <p className="text-xs">€{prize.prezzo.toFixed(2)} - {prize.tag}</p>
+                          <p className="text-xs text-gray-500">Disponibili: {prize.quantita}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
