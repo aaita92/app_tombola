@@ -92,11 +92,3 @@ Nella tab "Configurazione Estrazione" trovi il campo `Incasso per Estrazione (‚Ç
 
 - Se `make deploy-gh-pages` fallisce, controlla che tu abbia i permessi per pushare su `origin/gh-pages` e che l'URL remoto sia corretto.
 - Se preferisci che la branch `gh-pages` venga gestita in un modo specifico (es. includere `CNAME`, file aggiuntivi, o usare directory `docs/`), fammi sapere e adatto lo script.
-
----
-
-Se vuoi, posso anche:
-
-- Aggiungere uno script `npm run deploy` che chiama il target Makefile
-- Supportare `CNAME` per un dominio personalizzato
-- Integrare `gh-pages` npm package per un deploy ancora pi√π semplice
