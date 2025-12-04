@@ -7,8 +7,8 @@ const TombolaPrizeManager = () => {
   const [prizes, setPrizes] = useState([]);
   const [history, setHistory] = useState([]);
   const [config, setConfig] = useState({
-    schedeVendute: 100,
-    prezzoScheda: 5,
+    // Now we store total incasso per estrazione directly instead of #schede * prezzo
+    incasso: 500,
     percEntrate: 70,
     percTerna: 15,
     percQuaterna: 20,
@@ -35,7 +35,14 @@ const TombolaPrizeManager = () => {
       
       if (prizesData) setPrizes(JSON.parse(prizesData.value));
       if (historyData) setHistory(JSON.parse(historyData.value));
-      if (configData) setConfig(JSON.parse(configData.value));
+      if (configData) {
+        const loaded = JSON.parse(configData.value);
+        // Backwards compatibility: if older config used schedeVendute/prezzoScheda, compute incasso
+        if (loaded.incasso === undefined && loaded.schedeVendute !== undefined && loaded.prezzoScheda !== undefined) {
+          loaded.incasso = loaded.schedeVendute * loaded.prezzoScheda;
+        }
+        setConfig(loaded);
+      }
     } catch (error) {
       console.log('No previous data found');
     }
@@ -105,7 +112,7 @@ const TombolaPrizeManager = () => {
   };
 
   const calculateBudgets = () => {
-    const totale = config.schedeVendute * config.prezzoScheda;
+    const totale = config.incasso ?? 0;
     const budgetTotale = totale * (config.percEntrate / 100);
     return {
       totale,
@@ -229,9 +236,8 @@ const TombolaPrizeManager = () => {
       quaterna: selectedPrizes.quaterna || [],
       cinquina: selectedPrizes.cinquina || [],
       tombola: selectedPrizes.tombola || [],
-      // New fields requested: incasso (total receipts), biglietti (number of tickets), costo (total cost of prizes)
+  // New fields requested: incasso (total receipts), costo (total cost of prizes)
       incasso: budgetsForExtraction.totale,
-      biglietti: config.schedeVendute,
       costo: costsForExtraction.totale,
       scostamento: costsForExtraction.scostamento
     };
@@ -295,12 +301,12 @@ const TombolaPrizeManager = () => {
   };
 
   const exportToExcel = (data, filename) => {
-    // If `data` looks like the extraction history, produce two sheets:
-    // - `Estrazioni`: one row per extraction with incasso, biglietti, costo, scostamento
+  // If `data` looks like the extraction history, produce two sheets:
+  // - `Estrazioni`: one row per extraction with incasso, costo, scostamento
     // - `Premi`: one row per prize assigned (extractionId, categoria, descrizione, prezzo, qty, tag)
     if (Array.isArray(data) && data.length > 0 && data[0] && (data[0].terna !== undefined || data[0].tombola !== undefined)) {
       const extractions = data.map(h => {
-        const totaleIncasso = h.incasso ?? (h.config ? (h.config.schedeVendute * h.config.prezzoScheda) : 0);
+        const totaleIncasso = h.incasso ?? (h.config ? (h.config.incasso ?? 0) : 0);
         const totaleCosto = h.costo ?? (['terna','quaterna','cinquina','tombola'].reduce((sum,cat) => sum + ((h[cat] || []).reduce((s,i) => s + (i.prezzo * (i.qty ?? 1)), 0)), 0));
 
         // Build readable detail strings per category
@@ -311,17 +317,20 @@ const TombolaPrizeManager = () => {
           return `${i.descrizione} x${q} (€${p})${tag}`;
         }).join(' ; ');
 
+        const budgetFromConfig = (h.config?.incasso ?? 0) * ((h.config?.percEntrate ?? 0) / 100);
+        const scost = (h.scostamento !== undefined)
+          ? h.scostamento
+          : (typeof h.costo === 'number' ? (h.costo - budgetFromConfig) : (totaleCosto - budgetFromConfig));
+
         return {
           id: h.id,
           data: h.data ? new Date(h.data).toLocaleString('it-IT') : '',
           incasso: totaleIncasso,
-          biglietti: h.biglietti ?? (h.config ? h.config.schedeVendute : ''),
           costo: totaleCosto,
-          scostamento: (h.scostamento !== undefined) ? h.scostamento : (h.scostamento ?? (h.scostamento === 0 ? 0 : (h.costo ? h.costo - (h.config ? (h.config.schedeVendute * h.config.prezzoScheda * (h.config.percEntrate/100)) : 0) : ''))),
+          scostamento: scost,
           // keep the config fields for traceability
           percEntrate: h.config?.percEntrate ?? '',
-          prezzoScheda: h.config?.prezzoScheda ?? '',
-          schedeVendute: h.config?.schedeVendute ?? '',
+          incasso_config: h.config?.incasso ?? '',
           // Detailed prize lists per category (readable strings)
           terna_details: buildDetails('terna'),
           quaterna_details: buildDetails('quaterna'),
@@ -589,26 +598,15 @@ const TombolaPrizeManager = () => {
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-2xl font-bold text-gray-800 mb-6">Configurazione Estrazione</h2>
             
-            <div className="grid grid-cols-2 gap-6 mb-6">
+            <div className="grid grid-cols-1 gap-6 mb-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Numero Schede Vendute
+                  Incasso per Estrazione (€)
                 </label>
                 <input
                   type="number"
-                  value={config.schedeVendute}
-                  onChange={(e) => setConfig({ ...config, schedeVendute: parseInt(e.target.value) })}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Prezzo Singola Scheda (€)
-                </label>
-                <input
-                  type="number"
-                  value={config.prezzoScheda}
-                  onChange={(e) => setConfig({ ...config, prezzoScheda: parseFloat(e.target.value) })}
+                  value={config.incasso}
+                  onChange={(e) => setConfig({ ...config, incasso: parseFloat(e.target.value) })}
                   className="w-full border border-gray-300 rounded-lg px-4 py-2"
                 />
               </div>
@@ -745,17 +743,13 @@ const TombolaPrizeManager = () => {
                         Elimina
                       </button>
                     </div>
-                    <div className="grid grid-cols-3 gap-4 mb-3 text-sm">
+                    <div className="grid grid-cols-2 gap-4 mb-3 text-sm">
                       <div>
                         <p className="text-gray-500">Incasso</p>
                         <p className="font-bold">€{((extraction.incasso !== undefined)
                           ? extraction.incasso
-                          : (extraction.config ? extraction.config.schedeVendute * extraction.config.prezzoScheda : 0)
+                          : (extraction.config ? (extraction.config.incasso ?? 0) : 0)
                         ).toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">Biglietti</p>
-                        <p className="font-bold">{extraction.biglietti ?? (extraction.config ? extraction.config.schedeVendute : '-')}</p>
                       </div>
                       <div>
                         <p className="text-gray-500">Costo Premi</p>
